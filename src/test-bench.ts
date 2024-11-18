@@ -40,7 +40,12 @@ class VoiceAITestBench {
     this.logger.info(`Test result saved to ${resultFilePath}`);
   }
 
-  async runTestCase(testCase: TestCase) {
+  async runTestCase(testCase: TestCase | string) {
+    if (typeof testCase === 'string') {
+      this.logger.info(`Loading test case with name ${testCase}`);
+      testCase = JSON.parse(fs.readFileSync(path.join(this.config.test_suite.dir, `${testCase}.json`), 'utf-8')) as TestCase;
+    }
+
     this.logger.info(`Running test case`);
     this.logger.debug(`Test case: ${JSON.stringify(testCase, null, 2)}`);
     this.logger.info(`Instructions: ${testCase.instructions}`);
@@ -55,13 +60,15 @@ class VoiceAITestBench {
     return { conversation, evaluation: { conversation: JSON.parse(conversationEvaluation), information: extractedInformationEvaluation } };
   }
 
-  async runTestSuite() {
-    const testCases = fs.readdirSync(this.config.test_suite.dir).filter((file: string) => 
-        file.endsWith('.json') && !file.endsWith('.example.json')
-    );
+  async runTestCases() {
+    const testCases = fs.readdirSync(this.config.test_suite.dir).filter((file: string) => {
+      const fileName = path.basename(file, path.extname(file));
+      return !fileName.endsWith('.example.json');
+    });
 
-    this.logger.info(`Running test suite`);
+    this.logger.info(`Running test cases`);
     this.logger.debug(`Running ${testCases.length} test cases`);
+
     for (const testFile of testCases) {
       const filePath = path.join(this.config.test_suite.dir, testFile);
       const testCase = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as TestCase;

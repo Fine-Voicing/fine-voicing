@@ -10,6 +10,11 @@ const argv = yargs(process.argv.slice(2))
     description: 'Enable debug logging',
     default: false
   })
+  .option('test-case', {
+    alias: 'n',
+    type: 'string',
+    description: 'Run only test case with the given name'
+  })
   .help()
   .argv;
 
@@ -29,4 +34,9 @@ const logger = winston.createLogger({
   });
 
 const testBench = new VoiceAITestBench(logger);
-testBench.runTestSuite();
+
+if (argv['test-case']) {
+  testBench.runTestCase(argv['test-case']);
+} else {
+  testBench.runTestCases();
+}
