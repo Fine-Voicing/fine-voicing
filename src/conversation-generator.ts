@@ -8,7 +8,8 @@ import fs from "fs";
 import ConversationEvaluator from "./conversation-evaluator";
 
 class ConversationGenerator {
-    private openaiClient: OpenAI;
+    private promptGenerationClient: OpenAI;
+    private nextMessageClient: OpenAI;
     private realtimeClient: RealtimeClient;
     private logger: Logger;
     private config: Config;
@@ -22,7 +23,8 @@ class ConversationGenerator {
         this.logger = logger;
         this.testCase = testCase;
 
-        this.openaiClient = this.initializeOpenAIClient();
+        this.promptGenerationClient = this.initializeOpenAIClient(this.config.conversation_generator.generation_prompt.api_key);
+        this.nextMessageClient = this.initializeOpenAIClient(this.config.conversation_generator.next_message.api_key);
         this.realtimeClient = this.initializeRealtimeClient();
 
         this.conversation = [];
@@ -30,9 +32,9 @@ class ConversationGenerator {
         this.generationSystemPrompt = "";
     }
 
-    initializeOpenAIClient(): OpenAI {
+    initializeOpenAIClient(apiKey: string): OpenAI {
         this.logger.info(`Initializing OpenAI client`);
-        return new OpenAI({ apiKey: this.config.conversation_generator.api_key });
+        return new OpenAI({ apiKey });
     }
 
     initializeRealtimeClient(): RealtimeClient {
@@ -58,9 +60,11 @@ class ConversationGenerator {
     }
 
     async generateMessage(): Promise<string> {
+        const systemPrompt = fs.readFileSync(this.config.conversation_generator.next_message.system_prompt_path, 'utf-8');
+        const systemPromptWithInstructions = systemPrompt.replace('${instructions}', this.generationSystemPrompt);
+
         const messages = [
-            { role: 'system', content: `Generate the next (single one) message to append in a conversation, based on the instructions: ${this.generationSystemPrompt}` },
-            { role: 'system', content: "Use real information. Maximum 20 words. Do not hesitate to answer ambiguously or steer the discussion away, to force the assistant to come back to the original topic." }
+            { role: 'system', content: systemPromptWithInstructions }
         ];
 
         if (this.conversation.length > 0) {
@@ -70,8 +74,8 @@ class ConversationGenerator {
         this.logger.info(`Generating a message`);
         this.logger.debug(`System prompt: ${JSON.stringify(messages, null, 2)}`);
 
-        const response = await this.openaiClient?.chat.completions.create({
-            model: this.config.conversation_generator.model,
+        const response = await this.nextMessageClient?.chat.completions.create({
+            model: this.config.conversation_generator.next_message.model,
             messages: messages as ChatCompletionMessageParam[],
         });
 
@@ -95,7 +99,7 @@ class ConversationGenerator {
 
     async tts(message: string) {
         const randomVoice = this.voices[Math.floor(Math.random() * this.voices.length)];
-        const ttsResponse = await this.openaiClient.audio.speech.create({
+        const ttsResponse = await this.nextMessageClient.audio.speech.create({
             model: "tts-1",
             voice: randomVoice, // Randomly pick a voice from the supported values
             input: message,
@@ -111,12 +115,12 @@ class ConversationGenerator {
     }
 
     async generateConversationGenerationPrompt(): Promise<string> {
-        const systemPrompt = fs.readFileSync(this.config.conversation_generator.system_prompt_path, 'utf-8');
+        const systemPrompt = fs.readFileSync(this.config.conversation_generator.generation_prompt.system_prompt_path, 'utf-8');
         const systemPromptWithInstructions = systemPrompt.replace('${instructions}', this.testCase.instructions);
 
         this.logger.debug(`Conversation generation prompt: ${systemPromptWithInstructions}`);
-        const response = await this.openaiClient.chat.completions.create({
-            model: this.config.conversation_generator.model,
+        const response = await this.promptGenerationClient.chat.completions.create({
+            model: this.config.conversation_generator.generation_prompt.model,
             messages: [
                 { role: 'system', content: systemPromptWithInstructions }
             ]

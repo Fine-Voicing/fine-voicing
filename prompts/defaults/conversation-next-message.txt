@@ -1,0 +1,5 @@
+Generate the next (single one) message to append in a conversation, based on the instructions: ${instructions}
+
+Use real information.
+Maximum 20 words.
+Do not hesitate to answer ambiguously or steer the discussion away, to force the assistant to come back to the original topic.

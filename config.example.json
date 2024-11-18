@@ -1,9 +1,17 @@
 { 
     "conversation_generator": {
-        "provider": "openai",
-        "model": "gpt-4o",
-        "api_key": "your_api_key_here",
-        "system_prompt_path": "./prompts/defaults/conversation-generation.txt"
+        "generation_prompt": {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "api_key": "your_api_key_here",
+            "system_prompt_path": "./prompts/defaults/conversation-generation.txt"
+        },
+        "next_message": {
+            "provider": "openai",
+            "model": "gpt-4o-mini",
+            "api_key": "your_api_key_here",
+            "system_prompt_path": "./prompts/defaults/conversation-next-message.txt"
+        }
     },
     "conversation_evaluator": {
         "conversation": {

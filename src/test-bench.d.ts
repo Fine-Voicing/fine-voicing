@@ -37,7 +37,10 @@ export interface TestSuiteConfig {
 }
 
 export interface Config {
-    conversation_generator: ConversationGeneratorConfig;
+    conversation_generator: {
+        generation_prompt: ConversationGeneratorConfig;
+        next_message: ConversationGeneratorConfig;
+    };
     conversation_evaluator: ConversationEvaluatorConfig;
     test_suite: TestSuiteConfig;
 }

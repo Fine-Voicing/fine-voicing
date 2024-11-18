@@ -92,10 +92,18 @@ Use the `config.example.json` as a template.
 ```json
 { 
     "conversation_generator": {
-        "provider": "openai",
-        "model": "gpt-4o-mini",
-        "api_key": "your_api_key_here",
-        "system_prompt_path": "./prompts/defaults/conversation-generation.txt"
+        "generation_prompt": {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "api_key": "your_api_key_here",
+            "system_prompt_path": "./prompts/defaults/conversation-generation.txt"
+        },
+        "next_message": {
+            "provider": "openai",
+            "model": "gpt-4o-mini",
+            "api_key": "your_api_key_here",
+            "system_prompt_path": "./prompts/defaults/conversation-next-message.txt"
+        }
     },
     "conversation_evaluator": {
         "conversation": {
@@ -122,9 +130,11 @@ Use the `config.example.json` as a template.
 
 Prompts are located in the `prompts` directory.
 Three default prompts are provided:
-- `conversation-generation.txt`: Used to generate conversations.
+- `conversation-generation.txt`: Used to generate prompt for the test assistant based on the tested assistant instructions.
 - `conversation-evaluation.txt`: Used to evaluate the quality of conversations.
-- `conversation-information-extraction.txt`: Used to evaluate the extracted information from conversations.
+- `conversation-information-extraction.txt`: Used to evaluate the extracted 
+information from conversations.
+- `conversation-next-message.txt`: Used to generate the next message in a conversation.
 
 ## Architecture
 
