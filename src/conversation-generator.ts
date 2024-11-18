@@ -5,6 +5,7 @@ import { Config, TestMode, TestCase } from "./test-bench.d";
 import type ConversationItem from "./conversation-generator.d";
 import { RealtimeClient } from '@openai/realtime-api-beta';
 import fs from "fs";
+import ConversationEvaluator from "./conversation-evaluator";
 
 class ConversationGenerator {
     private openaiClient: OpenAI;
@@ -58,8 +59,8 @@ class ConversationGenerator {
 
     async generateMessage(): Promise<string> {
         const messages = [
-            { role: 'system', content: `Generate the next message in the conversation. The instructions are: ${this.generationSystemPrompt}` },
-            { role: 'system', content: "Use real information" },
+            { role: 'system', content: `Generate the next (single one) message to append in a conversation, based on the instructions: ${this.generationSystemPrompt}` },
+            { role: 'system', content: "Use real information. Maximum 20 words. Do not hesitate to answer ambiguously or steer the discussion away, to force the assistant to come back to the original topic." }
         ];
 
         if (this.conversation.length > 0) {
@@ -174,7 +175,9 @@ class ConversationGenerator {
 
                 await new Promise<void>(resolve => responseResolver = resolve);
 
-                for (let i = 0; i < this.testCase.turns; i++) {
+                let conversationShouldContinue = true;
+                let i = 0;
+                while (conversationShouldContinue && i < this.testCase.turns) {
                     const nextMessage = await this.generateMessage();
                     this.logger.info(`Sending generated message`);
                     this.logger.debug(`Generated message: ${nextMessage}`);
@@ -191,6 +194,9 @@ class ConversationGenerator {
 
                     // Wait for this message's response
                     await new Promise<void>(resolve => responseResolver = resolve);
+                    conversationShouldContinue = await new ConversationEvaluator(this.config, this.logger, this.conversation, this.testCase).evaluateConversationContinuation();
+                    this.logger.info(`Conversation should continue: ${conversationShouldContinue}`);
+                    i++;
                 }
 
                 this.logger.info(`Conversation complete`);

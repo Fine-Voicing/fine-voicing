@@ -28,6 +28,7 @@ export interface ConversationGeneratorConfig {
 export interface ConversationEvaluatorConfig {
     conversation: ConversationGeneratorConfig;
     information_extraction: ConversationGeneratorConfig;
+    conversation_continuation: ConversationGeneratorConfig;
 }
 
 export interface TestSuiteConfig {

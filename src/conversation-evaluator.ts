@@ -35,6 +35,13 @@ class ConversationEvaluator {
         return this.evaluate(systemPrompt, this.config.conversation_evaluator.information_extraction.model);
     }
 
+    async evaluateConversationContinuation(): Promise<boolean> {
+        this.logger.info(`Evaluating conversation continuation`);
+        const systemPrompt = this.createSystemPrompt(this.config.conversation_evaluator.conversation_continuation.system_prompt_path, this.testCase.instructions);
+        const allInformationExtracted = await this.evaluate(systemPrompt, this.config.conversation_evaluator.conversation_continuation.model);
+        return allInformationExtracted === 'NO';
+    }
+
     private async evaluate(systemPrompt: string, model: string): Promise<string> {
         const conversationTranscript = this.conversation.map(item => `- ${item.role}: ${item.content}`).join('\n');
         this.logger.debug(`System prompt: ${systemPrompt}`);

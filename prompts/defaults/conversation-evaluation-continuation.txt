@@ -1,0 +1,7 @@
+The following messages are the transcript of a conversation between a person and an assistant.
+
+Instructions: ${instructions}
+
+Answer YES if the conversation contains all the required information, or NO if you consider it should the assistant should continue seeking information.
+
+Conversation history: ${conversation}
