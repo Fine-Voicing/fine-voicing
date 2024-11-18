@@ -3,6 +3,7 @@ node_modules
 test-suites/*
 !test-suites/test.example.json
 test-results/*
+!test-results/test-result.example.json
 !prompts/defaults/*
 prompts/*.txt
 combined.log
