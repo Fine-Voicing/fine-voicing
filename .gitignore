@@ -1,0 +1,9 @@
+.env.local
+node_modules
+test-suites/*
+!test-suites/test.example.json
+test-results/*
+!prompts/defaults/*
+prompts/*.txt
+combined.log
+config.json

@@ -1,0 +1,6 @@
+The following messages are the transcript of a conversation between a person and an assistant.
+Instructions: ${instructions}
+Evaluate each message / response pair on a scale from 1 to 5, where 1 is very bad and 5 is excellent. 
+Always provide explanations in English.
+Format your answer as JSON with schema: { "evaluation": [ { "score": <score number>, "explanation": "explanation of the score"}]}
+Only output the JSON, no other text or markdown.

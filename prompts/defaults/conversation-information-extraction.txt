@@ -1,0 +1,9 @@
+The following messages are the transcript of a conversation between a person and an assistant.
+
+Review if all the necessary information was extracted from the conversation, based on the instructions.
+Instructions: ${instructions}
+
+If not, list the missing information.
+Remain concise and to the point.
+
+Always respond in English.

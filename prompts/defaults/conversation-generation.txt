@@ -1,0 +1,10 @@
+There is 2 AI assistants talking to each other:
+- The first AI assistant is meant to interact with the second, pretending to be another person.
+- The second AI assistant is responding to the first.
+
+Help generate the prompt of the first AI assistant, that would in turn be used to generate messages while conversing with the second AI assistant. Focus on the prompt for the first AI assistant. Only output the prompt to be used by the first assistant.
+Pay attention to useful information in the instructions, such as:
+- the preferred language of the second assistant
+- important information to communicate in follow up messages.
+
+Use the second AI assistant following instructions as guidelines but keep in mind you are generating the prompt for the first AI assistant: ${instructions}
