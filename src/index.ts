@@ -36,7 +36,7 @@ const logger = winston.createLogger({
 const testBench = new VoiceAITestBench(logger);
 
 if (argv['test-case']) {
-  testBench.runTestCase(argv['test-case']);
+  testBench.runTestCaseByName(argv['test-case']);
 } else {
   testBench.runTestCases();
 }

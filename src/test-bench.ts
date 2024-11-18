@@ -39,12 +39,17 @@ class VoiceAITestBench {
     this.logger.info(`Test result saved to ${resultFilePath}`);
   }
 
-  async runTestCase(testCase: TestCase | string) {
-    if (typeof testCase === 'string') {
-      this.logger.info(`Loading test case with name ${testCase}`);
-      testCase = JSON.parse(fs.readFileSync(path.join(this.config.test_suite.dir, `${testCase}.json`), 'utf-8')) as TestCase;
-    }
+  async runTestCaseByName(testCaseName: string) {
+    const testCaseFilePath = path.join(this.config.test_suite.dir, `${testCaseName}.json`);
+    const testCase = JSON.parse(fs.readFileSync(testCaseFilePath, 'utf-8')) as TestCase;
+    
+    const testResult = await this.runTestCase(testCase);
+    this.saveTestResult(testResult, testCaseFilePath);
+    
+    return testResult;
+  }
 
+  async runTestCase(testCase: TestCase) {
     this.logger.info(`Running test case`);
     this.logger.debug(`Test case: ${JSON.stringify(testCase, null, 2)}`);
     this.logger.info(`Instructions: ${testCase.instructions}`);
@@ -56,7 +61,9 @@ class VoiceAITestBench {
     const conversationEvaluation = await this.conversationEvaluator.evaluateConversation();
     const extractedInformationEvaluation = await this.conversationEvaluator.evaluateExtractedInformation();
 
-    return { conversation, evaluation: { conversation: JSON.parse(conversationEvaluation), information: extractedInformationEvaluation } };
+    const testResult = { conversation, evaluation: { conversation: JSON.parse(conversationEvaluation), information: extractedInformationEvaluation } };
+
+    return testResult;
   }
 
   async runTestCases() {
