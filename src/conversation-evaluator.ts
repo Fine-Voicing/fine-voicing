@@ -1,78 +1,77 @@
 import { Config, TestCase } from "./test-bench.d";
 import { Logger } from "winston";
-import fs from "fs";
 import { ConversationItem } from "./conversation-generator.d";
-import { ChatCompletionMessageParam } from "openai/resources/index.mjs";
-import OpenAI from "openai";
+import { ConversationQualityAgent } from "./conversation-quality-agent";
+import { InformationExtractionAgent } from "./information-extraction-agent";
 
 class ConversationEvaluator {
-    private openaiClient: OpenAI;
-    private config: Config;
-    private logger: Logger;
+    private qualityAgent: ConversationQualityAgent;
+    private extractionAgent: InformationExtractionAgent;
     private conversation: ConversationItem[];
     private testCase: TestCase;
+    private logger: Logger;
 
     constructor(config: Config, logger: Logger, conversation: ConversationItem[], testCase: TestCase) {
-        this.config = config;
         this.logger = logger;
         this.conversation = conversation;
         this.testCase = testCase;
-
-        this.openaiClient = new OpenAI({
-            apiKey: config.conversation_evaluator.conversation.api_key,
-        });
+        
+        this.qualityAgent = new ConversationQualityAgent(config, logger);
+        this.extractionAgent = new InformationExtractionAgent(config, logger);
     }
 
     async evaluateConversation(): Promise<string> {
-        this.logger.info(`Evaluating conversation`);
-        const systemPrompt = this.createSystemPrompt(this.config.conversation_evaluator.conversation.system_prompt_path, this.testCase.instructions);
-        return this.evaluate(systemPrompt, this.config.conversation_evaluator.conversation.model);
+        return new Promise((resolve) => {
+            this.qualityAgent.once('reaction', (reaction) => {
+                if (reaction.type === 'QUALITY_EVALUATED') {
+                    resolve(reaction.payload.evaluation);
+                }
+            });
+
+            this.qualityAgent.dispatch({
+                type: 'EVALUATE_QUALITY',
+                payload: {
+                    conversation: this.conversation,
+                    instructions: this.testCase.instructions
+                }
+            });
+        });
     }
 
     async evaluateExtractedInformation(): Promise<string> {
-        this.logger.info(`Evaluating extracted information`);
-        const systemPrompt = this.createSystemPrompt(this.config.conversation_evaluator.information_extraction.system_prompt_path, this.testCase.instructions);
-        return this.evaluate(systemPrompt, this.config.conversation_evaluator.information_extraction.model);
+        return new Promise((resolve) => {
+            this.extractionAgent.once('reaction', (reaction) => {
+                if (reaction.type === 'EXTRACTION_EVALUATED') {
+                    resolve(reaction.payload.result);
+                }
+            });
+
+            this.extractionAgent.dispatch({
+                type: 'EVALUATE_EXTRACTION',
+                payload: {
+                    conversation: this.conversation,
+                    instructions: this.testCase.instructions
+                }
+            });
+        });
     }
 
     async evaluateConversationContinuation(): Promise<boolean> {
-        this.logger.info(`Evaluating conversation continuation`);
-        const systemPrompt = this.createSystemPrompt(this.config.conversation_evaluator.conversation_continuation.system_prompt_path, this.testCase.instructions);
-        const allInformationExtracted = await this.evaluate(systemPrompt, this.config.conversation_evaluator.conversation_continuation.model);
-        return allInformationExtracted === 'NO';
-    }
+        return new Promise((resolve) => {
+            this.extractionAgent.once('reaction', (reaction) => {
+                if (reaction.type === 'COMPLETION_CHECKED') {
+                    resolve(reaction.payload.shouldContinue || false);
+                }
+            });
 
-    private async evaluate(systemPrompt: string, model: string): Promise<string> {
-        const conversationTranscript = this.conversation.map(item => `- ${item.role}: ${item.content}`).join('\n');
-        this.logger.debug(`System prompt: ${systemPrompt}`);
-        this.logger.debug(`Conversation: ${conversationTranscript}`);
-
-        const messages: ChatCompletionMessageParam[] = [];
-        messages.push(
-            {
-                role: 'system',
-                content: systemPrompt
-            },
-            {
-                role: 'system',
-                content: `Conversation:\n${conversationTranscript}`
-            }
-        );
-
-        const response = await this.openaiClient?.chat.completions.create({
-            model: model,
-            messages: messages as ChatCompletionMessageParam[],
+            this.extractionAgent.dispatch({
+                type: 'CHECK_COMPLETION',
+                payload: {
+                    conversation: this.conversation,
+                    instructions: this.testCase.instructions
+                }
+            });
         });
-
-        const content = response?.choices[0].message.content;
-
-        this.logger.debug(`Evaluation result: ${content}`);
-        return content;
-    }
-
-    private createSystemPrompt(path: string, instructions: string): string {
-        const systemPrompt = fs.readFileSync(path, 'utf-8');
-        return systemPrompt.replace('${instructions}', instructions);
     }
 }
 
