@@ -3,8 +3,8 @@ import fs from "fs";
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { TestCase, Config } from './test-bench.d';
-import { Logger } from "winston";
-import ConversationGenerator from './conversation-generator';
+import winston, { Logger } from "winston";
+import ConversationAgent from './conversation-agent';
 import ConversationEvaluator from './conversation-evaluator';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12,7 +12,7 @@ const __dirname = dirname(__filename);
 
 class VoiceAITestBench {
   private config: Config;
-  private conversationGenerator!: ConversationGenerator;
+  private agent!: ConversationAgent;
   private conversationEvaluator!: ConversationEvaluator;
   private logger: Logger;
 
@@ -43,21 +43,36 @@ class VoiceAITestBench {
     const testCaseFilePath = path.join(this.config.test_suite.dir, `${testCaseName}.json`);
     const testCase = JSON.parse(fs.readFileSync(testCaseFilePath, 'utf-8')) as TestCase;
     
-    const testResult = await this.runTestCase(testCase);
+    const testLogger = this.createLoggerForTestCase(testCaseName);
+    const testResult = await this.runTestCase(testCase, testLogger);
     this.saveTestResult(testResult, testCaseFilePath);
     
     return testResult;
   }
 
-  async runTestCase(testCase: TestCase) {
-    this.logger.info(`Running test case`);
-    this.logger.debug(`Test case: ${JSON.stringify(testCase, null, 2)}`);
-    this.logger.info(`Instructions: ${testCase.instructions}`);
+  private createLoggerForTestCase(testCaseName: string): Logger {
+    const testLogger = this.logger.child({});
+    // Add file transport specific to this test case
+    testLogger.add(
+      new winston.transports.File({
+        filename: `logs/${testCaseName}-${Date.now()}.log`
+      })
+    );
+    return testLogger;
+  }
 
-    this.conversationGenerator = new ConversationGenerator(this.config, testCase, this.logger);
-    const conversation = await this.conversationGenerator.converse();
+  async runTestCase(testCase: TestCase, testLogger: Logger): Promise<any> {    
+    testLogger.info(`Running test case`);
+    testLogger.debug(`Test case: ${JSON.stringify(testCase, null, 2)}`);
+    testLogger.info(`Instructions: ${testCase.instructions}`);
 
-    this.conversationEvaluator = new ConversationEvaluator(this.config, this.logger, conversation, testCase);
+    this.agent = new ConversationAgent(this.config, testCase, testLogger);
+    await this.agent.start();
+
+    // Wait for the conversation to complete and get the final state
+    const conversation = this.agent.getState().memory;
+
+    this.conversationEvaluator = new ConversationEvaluator(this.config, testLogger, conversation, testCase);
     const conversationEvaluation = await this.conversationEvaluator.evaluateConversation();
     const extractedInformationEvaluation = await this.conversationEvaluator.evaluateExtractedInformation();
 
@@ -80,11 +95,13 @@ class VoiceAITestBench {
       const testCase = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as TestCase;
 
       this.logger.info(`Running test case ${testFile}`);
-      const testResult = await this.runTestCase(testCase);
+      const fileName = path.parse(testFile).name;
+      const testLogger = this.createLoggerForTestCase(fileName);
+      const testResult = await this.runTestCase(testCase, testLogger);
       this.saveTestResult(testResult, testFile);
     }
 
-    await this.conversationGenerator.disconnect();
+    await this.agent.disconnect();
   }
 }
 

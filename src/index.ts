@@ -1,6 +1,14 @@
 import VoiceAITestBench from './test-bench';
 import winston, { format } from 'winston';
 import yargs from 'yargs';
+import fs from 'fs';
+import path from 'path';
+
+// Create logs directory if it doesn't exist
+const logsDir = path.join(process.cwd(), 'logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir);
+}
 
 // Add command line arguments parsing
 const argv = yargs(process.argv.slice(2))
@@ -28,8 +36,8 @@ const logger = winston.createLogger({
       })
     ),
     transports: [
-      new winston.transports.Console(),
-      new winston.transports.File({ filename: 'combined.log' })
+      new winston.transports.Console()
+      // Removed global log file - each test case will have its own log file
     ]
   });
 

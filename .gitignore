@@ -8,3 +8,5 @@ test-results/*
 prompts/*.txt
 combined.log
 config.json
+.DS_Store
+logs
