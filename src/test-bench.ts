@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { TestCase, Config } from './test-bench.d';
 import { Logger } from "winston";
-import ConversationGenerator from './conversation-generator';
+import { ConversationGeneratorBase, ConversationGeneratorOpenAI, ConversationGeneratorUltravox } from './conversation-generator';
 import ConversationEvaluator from './conversation-evaluator';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12,7 +12,7 @@ const __dirname = dirname(__filename);
 
 class VoiceAITestBench {
   private config: Config;
-  private conversationGenerator!: ConversationGenerator;
+  private conversationGenerator!: ConversationGeneratorBase;
   private conversationEvaluator!: ConversationEvaluator;
   private logger: Logger;
 
@@ -42,10 +42,10 @@ class VoiceAITestBench {
   async runTestCaseByName(testCaseName: string) {
     const testCaseFilePath = path.join(this.config.test_suite.dir, `${testCaseName}.json`);
     const testCase = JSON.parse(fs.readFileSync(testCaseFilePath, 'utf-8')) as TestCase;
-    
+
     const testResult = await this.runTestCase(testCase);
     this.saveTestResult(testResult, testCaseFilePath);
-    
+
     return testResult;
   }
 
@@ -54,7 +54,8 @@ class VoiceAITestBench {
     this.logger.debug(`Test case: ${JSON.stringify(testCase, null, 2)}`);
     this.logger.info(`Instructions: ${testCase.instructions}`);
 
-    this.conversationGenerator = new ConversationGenerator(this.config, testCase, this.logger);
+    this.conversationGenerator = testCase.voice_model.provider === 'ultravox' ? new ConversationGeneratorUltravox(this.config, testCase, this.logger) : new ConversationGeneratorOpenAI(this.config, testCase, this.logger);
+    await this.conversationGenerator.connect();
     const conversation = await this.conversationGenerator.converse();
 
     this.conversationEvaluator = new ConversationEvaluator(this.config, this.logger, conversation, testCase);

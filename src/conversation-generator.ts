@@ -6,49 +6,32 @@ import type ConversationItem from "./conversation-generator.d";
 import { RealtimeClient } from '@openai/realtime-api-beta';
 import fs from "fs";
 import ConversationEvaluator from "./conversation-evaluator";
+import { WebSocket } from "ws";
+import Speaker from 'speaker';
 
-class ConversationGenerator {
+class ConversationGeneratorBase {
     private promptGenerationClient: OpenAI;
     private nextMessageClient: OpenAI;
-    private realtimeClient: RealtimeClient;
-    private logger: Logger;
+    protected logger: Logger;
     private config: Config;
-    private conversation: ConversationItem[];
-    private voices: ("alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer")[];
+    protected conversation: ConversationItem[];
     private generationSystemPrompt: string;
-    private testCase: TestCase;
+    protected testCase: TestCase;
 
-    constructor(config: Config, testCase: TestCase, logger: Logger) {   
+    constructor(config: Config, testCase: TestCase, logger: Logger) {
         this.config = config;
         this.logger = logger;
         this.testCase = testCase;
 
         this.promptGenerationClient = this.initializeOpenAIClient(this.config.conversation_generator.generation_prompt.api_key);
         this.nextMessageClient = this.initializeOpenAIClient(this.config.conversation_generator.next_message.api_key);
-        this.realtimeClient = this.initializeRealtimeClient();
-
         this.conversation = [];
-        this.voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
         this.generationSystemPrompt = "";
     }
 
     initializeOpenAIClient(apiKey: string): OpenAI {
         this.logger.info(`Initializing OpenAI client`);
         return new OpenAI({ apiKey });
-    }
-
-    initializeRealtimeClient(): RealtimeClient {
-        this.logger.info(`Initializing realtime client`);
-        const realtimeClient = new RealtimeClient({ apiKey: this.testCase.voice_model.api_key });
-
-        realtimeClient.updateSession({
-            instructions: this.testCase.instructions,
-            voice: this.testCase.voice_model.voice as ("alloy" | "echo" | "shimmer" | "ash" | "ballad" | "coral" | "sage" | "verse"),
-            turn_detection: null,
-            input_audio_transcription: { model: 'whisper-1' },
-        });
-
-        return realtimeClient;
     }
 
     setConversation(conversation: ConversationItem[]) {
@@ -86,15 +69,7 @@ class ConversationGenerator {
     }
 
     async sendMessage(message: string) {
-        if (this.testCase.test_mode === TestMode.TTS) {
-            this.logger.info(`Sending message as audio`);
-            const audioBuffer = await this.tts(message);
-            this.realtimeClient.sendUserMessageContent([{ type: 'input_audio', audio: audioBuffer.toString('base64') }]);
-        }
-        else {
-            this.logger.info(`Sending message as text`);
-            this.realtimeClient.sendUserMessageContent([{ type: 'input_text', text: message }]);
-        }
+        throw new Error('Method not implemented.');
     }
 
     async tts(message: string) {
@@ -110,8 +85,12 @@ class ConversationGenerator {
         return audioBuffer;
     }
 
+    async connect() {
+        throw new Error('Method not implemented.');
+    }
+
     async disconnect() {
-        await this.realtimeClient?.disconnect();
+        throw new Error('Method not implemented.');
     }
 
     async generateConversationGenerationPrompt(): Promise<string> {
@@ -134,12 +113,59 @@ class ConversationGenerator {
     }
 
     async converse(): Promise<ConversationItem[]> {
+        throw new Error('Method not implemented.');
+    }
+}
+
+class ConversationGeneratorOpenAI extends ConversationGeneratorBase {
+    private realtimeClient: RealtimeClient;
+
+    constructor(config: Config, testCase: TestCase, logger: Logger) {
+        super(config, testCase, logger);
+        this.realtimeClient = this.initializeRealtimeClient();
+    }
+
+    initializeRealtimeClient(): RealtimeClient {
+        this.logger.info(`Initializing realtime client`);
+        const realtimeClient = new RealtimeClient({ apiKey: this.testCase.voice_model.api_key });
+
+        realtimeClient.updateSession({
+            instructions: this.testCase.instructions,
+            voice: this.testCase.voice_model.voice as ("alloy" | "echo" | "shimmer" | "ash" | "ballad" | "coral" | "sage" | "verse"),
+            turn_detection: null,
+            input_audio_transcription: { model: 'whisper-1' },
+        });
+
+        return realtimeClient;
+    }
+
+    async sendMessage(message: string) {
+        if (this.testCase.test_mode === TestMode.TTS) {
+            this.logger.info(`Sending message as audio`);
+            const audioBuffer = await this.tts(message);
+            this.realtimeClient.sendUserMessageContent([{ type: 'input_audio', audio: audioBuffer.toString('base64') }]);
+        }
+        else {
+            this.logger.info(`Sending message as text`);
+            this.realtimeClient.sendUserMessageContent([{ type: 'input_text', text: message }]);
+        }
+    }
+
+    async connect(): Promise<void> {
+        await this.realtimeClient.connect();
+    }
+
+    async disconnect(): Promise<void> {
+        await this.realtimeClient.disconnect();
+    }
+
+    async converse(): Promise<ConversationItem[]> {
         return new Promise(async (resolve, reject) => {
             let responseResolver: (() => void) | null = null;
             let isWaitingForResponse = false;
             this.conversation = [];
 
-            await this.realtimeClient.connect();
+            await this.connect();
 
             const handleEvent = (event: any) => {
                 //this.logger.debug(`Event: ${event?.type}`);
@@ -215,4 +241,172 @@ class ConversationGenerator {
     }
 }
 
-export default ConversationGenerator;
+class ConversationGeneratorUltravox extends ConversationGeneratorBase {
+    private webSocketClient!: WebSocket;
+    private speaker: Speaker;
+
+    constructor(config: Config, testCase: TestCase, logger: Logger) {
+        super(config, testCase, logger);
+
+        this.speaker = new Speaker({
+            channels: 1,
+            bitDepth: 16,
+            sampleRate: 48000
+        });
+    }
+
+    async connect(): Promise<void> {
+        const response = await fetch('https://api.ultravox.ai/api/calls', {
+            method: 'POST',
+            headers: {
+                'X-API-Key': this.testCase.voice_model.api_key,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                systemPrompt: this.testCase.instructions,
+                model: this.testCase.voice_model.model || "fixie-ai/ultravox",
+                voice: this.testCase.voice_model.voice || 'Mark',
+                medium: {
+                    serverWebSocket: {
+                        inputSampleRate: 48000,
+                        outputSampleRate: 48000,
+                        clientBufferSizeMs: 30000
+                    }
+                }
+            })
+        });
+
+        const { joinUrl } = await response.json();
+
+        this.webSocketClient = new WebSocket(joinUrl);
+
+        this.webSocketClient.on('open', () => {
+            this.logger.info('WebSocket connection to Ultravox opened');
+            this.webSocketClient.send(JSON.stringify({ type: 'set_output_medium', medium: 'text' }));
+        });
+    }
+
+    async disconnect(): Promise<void> {
+        this.speaker.end();
+        this.webSocketClient.on('close', () => {
+            this.logger.info('WebSocket connection to Ultravox closed');
+        });
+        this.webSocketClient.close();
+    }
+
+    async sendMessage(message: string) {
+        if (this.testCase.test_mode === TestMode.TTS) {
+            this.logger.info(`Sending message as audio`);
+            const audioBuffer = await this.tts(message);
+            this.webSocketClient.send(audioBuffer);
+        }
+        else {
+            this.logger.info(`Sending message as text`);
+            this.webSocketClient.send(JSON.stringify({ type: 'input_text_message', text: message }));
+        }
+    }
+
+    async converse(): Promise<ConversationItem[]> {
+        return new Promise(async (resolve, reject) => {
+            let responseResolver: (() => void) | null = null;
+            let isWaitingForResponse = false;
+            this.conversation = [];
+
+            await this.connect();
+
+            const handleEvent = (data: any) => {
+                this.logger.debug(`Raw Event: ${data}`);
+
+                try {
+                    this.logger.debug(`typeof data: ${typeof data}`)
+                    const event = JSON.parse(data);
+                    if (typeof event !== 'object' || event === null) {
+                        this.logger.error(`Non JSON formatted event: ${data}`);
+                        return;
+                    }
+
+                    this.logger.debug(`Event: ${JSON.stringify(event)}`);
+
+                    switch (event?.type) {
+                        case 'Buffer':
+                            this.logger.info('Received audio');
+                            this.speaker.write(event.data);
+                        case 'transcript':
+                            if (event.role === 'agent' && event.final) {
+                                const transcript = event.text;
+                                this.logger.info('Response complete');
+                                this.logger.debug(`Transcript: ${transcript}`);
+                                this.conversation.push({ role: 'assistant', content: transcript });
+                                isWaitingForResponse = false;
+                                if (responseResolver) {
+                                    responseResolver();
+                                    responseResolver = null;
+                                }
+                            }
+                            break;
+                        case 'error':
+                            this.logger.error(`Error: ${JSON.stringify(event)}`);
+                            isWaitingForResponse = false;
+                            if (responseResolver) {
+                                responseResolver();
+                                responseResolver = null;
+                            }
+                            break;
+                    }
+                } catch (error) {
+                    this.logger.error(`Error while parsing event: ${data}`);
+                    return;
+                }
+            };
+
+            this.webSocketClient.on('message', handleEvent);
+
+            try {
+                await this.generateConversationGenerationPrompt();
+
+                const firstMessage = await this.generateMessage();
+                this.logger.info(`Sending first message`);
+                this.logger.debug(`First message: ${firstMessage}`);
+                this.conversation.push({ role: 'user', content: firstMessage });
+                this.sendMessage(firstMessage);
+
+                await new Promise<void>(resolve => responseResolver = resolve);
+
+                let conversationShouldContinue = true;
+                let i = 0;
+                while (conversationShouldContinue && i < this.testCase.turns) {
+                    const nextMessage = await this.generateMessage();
+                    this.logger.info(`Sending generated message`);
+                    this.logger.debug(`Generated message: ${nextMessage}`);
+                    this.conversation.push({ role: 'user', content: nextMessage });
+
+                    // Wait for any previous response to complete
+                    if (isWaitingForResponse) {
+                        await new Promise<void>(resolve => responseResolver = resolve);
+                    }
+
+                    // Send the message and mark that we're waiting
+                    isWaitingForResponse = true;
+                    this.sendMessage(nextMessage);
+
+                    // Wait for this message's response
+                    await new Promise<void>(resolve => responseResolver = resolve);
+                    conversationShouldContinue = await new ConversationEvaluator(this.config, this.logger, this.conversation, this.testCase).evaluateConversationContinuation();
+                    this.logger.info(`Conversation should continue: ${conversationShouldContinue}`);
+                    i++;
+                }
+
+                this.logger.info(`Conversation complete`);
+                this.logger.debug(`Conversation transcript:\n${this.conversation.map((item) => `- ${item.role}: ${item.content}`).join('\n')}`);
+
+            } finally {
+                // Clean up the event listener when we're done
+                this.webSocketClient.off('*', handleEvent);
+            }
+            resolve(this.conversation);
+        });
+    }
+}
+
+
+export { ConversationGeneratorBase, ConversationGeneratorOpenAI, ConversationGeneratorUltravox };
