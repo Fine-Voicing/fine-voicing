@@ -23,14 +23,15 @@ class ConversationGeneratorBase {
         this.logger = logger;
         this.testCase = testCase;
 
+        this.logger.info(`Initializing OpenAI prompt generator client`);
         this.promptGenerationClient = this.initializeOpenAIClient(this.config.conversation_generator.generation_prompt.api_key);
+        this.logger.info(`Initializing OpenAI next message client`);
         this.nextMessageClient = this.initializeOpenAIClient(this.config.conversation_generator.next_message.api_key);
         this.conversation = [];
         this.generationSystemPrompt = "";
     }
 
     initializeOpenAIClient(apiKey: string): OpenAI {
-        this.logger.info(`Initializing OpenAI client`);
         return new OpenAI({ apiKey });
     }
 
@@ -266,6 +267,9 @@ class ConversationGeneratorUltravox extends ConversationGeneratorBase {
                 systemPrompt: this.testCase.instructions,
                 model: this.testCase.voice_model.model || "fixie-ai/ultravox",
                 voice: this.testCase.voice_model.voice || 'Mark',
+                initiator: 'INITIATOR_USER',
+                initialOutputMedium: 'MESSAGE_MEDIUM_TEXT',
+                recordingEnabled: true,
                 medium: {
                     serverWebSocket: {
                         inputSampleRate: 48000,
@@ -276,13 +280,19 @@ class ConversationGeneratorUltravox extends ConversationGeneratorBase {
             })
         });
 
-        const { joinUrl } = await response.json();
+        const responseJson = await response.json();
+        if (!response.ok) {
+            const error = new Error(`Failed to get join URL: ${response.status} ${response.statusText}`);
+            Object.assign(error, responseJson);
+            throw error;
+        }
 
+        const { joinUrl } = responseJson;
+        this.logger.debug(`Join URL: ${joinUrl}`);
+        
         this.webSocketClient = new WebSocket(joinUrl);
-
         this.webSocketClient.on('open', () => {
             this.logger.info('WebSocket connection to Ultravox opened');
-            this.webSocketClient.send(JSON.stringify({ type: 'set_output_medium', medium: 'text' }));
         });
     }
 
@@ -328,9 +338,6 @@ class ConversationGeneratorUltravox extends ConversationGeneratorBase {
                     this.logger.debug(`Event: ${JSON.stringify(event)}`);
 
                     switch (event?.type) {
-                        case 'Buffer':
-                            this.logger.info('Received audio');
-                            this.speaker.write(event.data);
                         case 'transcript':
                             if (event.role === 'agent' && event.final) {
                                 const transcript = event.text;
@@ -354,8 +361,16 @@ class ConversationGeneratorUltravox extends ConversationGeneratorBase {
                             break;
                     }
                 } catch (error) {
-                    this.logger.error(`Error while parsing event: ${data}`);
-                    return;
+                    this.logger.error(`Error while parsing event as JSON: ${data}, error: ${error}`);
+                    this.logger.info('Attempting to decode binary data');
+                    try {
+                        const audioBuffer = Buffer.from(data);
+                        this.logger.debug(`Audio data (base64): ${audioBuffer.toString('base64')}`);
+                        this.speaker.write(audioBuffer);
+                    } catch (decodeError) {
+                        this.logger.error(`Error decoding binary data: ${decodeError}`);
+                        return;
+                    }
                 }
             };
 
