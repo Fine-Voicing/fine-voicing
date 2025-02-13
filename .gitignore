@@ -10,3 +10,13 @@ combined.log
 config.json
 .DS_Store
 logs/
+coverage
+prds
+.env
+.env.*
+# TypeScript incremental compilation cache
+*.tsbuildinfo
+# Build output
+build/
+# VS Code settings
+.vscode/
