@@ -117,6 +117,13 @@ export class OutboundCallQueueHandler {
             throw new Error(`Model instance not found: ${conversationData.model_instance_id}`);
         }
 
+        if (!data.message.is_demo) {
+            const isSubscriptionActive = await this.stripeCheckSubscriptionStatus(data.message.user_id);
+            if (!isSubscriptionActive) {
+                throw new Error(`User ${data.message.user_id} subscription is not active`);
+            }
+        }
+
         const agent = new ConversationAgent({
             mode: AGENT_MODE.STS,
             instructions: conversationData.prompt,
@@ -218,7 +225,10 @@ export class OutboundCallQueueHandler {
         }
 
         await this.saveTranscripts(agent, conversation, modelInstance);
-        await this.stripeMeterOutboundCall(messageData.message.user_id, duration);
+        if (!messageData.message.is_demo) {
+            await this.stripeMeterOutboundCall(messageData.message.user_id, duration);
+        }
+
         this.activeAgents.delete(callSid);
 
         await this.supabaseQueueClient.rpc('archive', {
@@ -299,6 +309,16 @@ export class OutboundCallQueueHandler {
                 stripe_customer_id: user_profile.stripe_customer_id,
             },
         });
+    }
+
+    private async stripeCheckSubscriptionStatus(userId: string) {
+        const { data, error } = await this.supabase.from('profiles').select('stripe_subscription_status').eq('id', userId).single();
+
+        if (error) {
+            throw new Error(error.message);
+        }
+        
+        return data.stripe_subscription_status === 'active';
     }
 
     // Function to gracefully cleanup all active sessions

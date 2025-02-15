@@ -61,6 +61,7 @@ export type OutboundCallMessage = {
     conversation_id: string;
     model_instance_id: string;
     to_phone_number: string;
+    is_demo: boolean;
   }
 }
 
