@@ -403,10 +403,15 @@ export interface PersonaInstructions {
     }
 
     this.logger?.info(`Received transcription: "${JSON.stringify(transcription, null, 2)}"`);
-    this.transcripts.push(transcription);
+    const transcriptionFormatted = {
+      role: transcription.role,
+      role_name: transcription.role === 'user' ? `${this.personaRole?.role_name} (Fine Voicing)` : 'Your voice agent',
+      content: transcription.content
+    };
+    this.transcripts.push(transcriptionFormatted);
 
     this.eventBus.emit('transcription-chunk', {
-      text: transcription,
+      text: transcriptionFormatted,
       streamSid: this.streamId,
       //modelInstanceId: this.modelInstanceId
     });

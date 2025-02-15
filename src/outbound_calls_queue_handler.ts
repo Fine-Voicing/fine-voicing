@@ -1,12 +1,11 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { OutboundCallMessage } from './types/index.js';
-import { log } from './utils/logger.js';
+import { log, TwilioLogger } from './utils/logger.js';
 import { ConversationAgent } from './conversation-agent.js';
-import { AGENT_MODE } from './types/index.js';
-import { TwilioLogger } from './utils/logger.js';
+import { AGENT_MODE, EmailContext, ModelInstance, OutboundCallMessage } from './types/index.js';
 import Twilio from 'twilio';
-import { ModelInstance } from './types/index.js';
 import Stripe from 'stripe';
+import { EmailService } from './services/email.service.js';
+
 export class OutboundCallQueueHandler {
     private supabase: SupabaseClient<any, "pgmq_public", any>;
     private supabaseQueueClient: SupabaseClient<any, "pgmq_public", any>;
@@ -15,6 +14,7 @@ export class OutboundCallQueueHandler {
     private twilioClient: Twilio.Twilio;
     private activeAgents: Map<string, ConversationAgent>;
     private isProcessing: boolean;
+    private emailService: EmailService;
 
     private readonly QUEUE_NAME = 'outbound_calls';
     private readonly DEFAULT_QUEUE_MESSAGE_SLEEP_TIME = 10 * 60;
@@ -52,7 +52,7 @@ export class OutboundCallQueueHandler {
         this.supabaseQueueClient = createClient<any, "pgmq_public", any>(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!, { db: { schema: 'pgmq_public' } });
         this.twilioClient = new Twilio.Twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!);
         this.activeAgents = activeAgents;
-
+        this.emailService = new EmailService();
         this.isProcessing = false;
     }
 
@@ -228,6 +228,21 @@ export class OutboundCallQueueHandler {
         if (!messageData.message.is_demo) {
             await this.stripeMeterOutboundCall(messageData.message.user_id, duration);
         }
+
+        const user = await this.supabase.auth.admin.getUserById(messageData.message.user_id);
+        if (!user.data.user?.email) {
+            log.error(`[OutboundCallQueueHandler] User ${messageData.message.user_id} has no email: ${callSid}`);
+            return;
+        }
+
+        const emailContext: EmailContext = {
+            prompt: conversation.prompt,
+            transcript: agent.getTranscripts(),
+            duration: duration,
+            to_phone_number: messageData.message.to_phone_number,
+            secureLink: ''
+        };
+        await this.emailService.sendEmail(user.data.user.email, emailContext);
 
         this.activeAgents.delete(callSid);
 

@@ -19,7 +19,8 @@ export interface ErrorEvent {
 }
 
 export interface ConversationItem {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'moderator';
+  role_name?: string;
   content: string;
 }
 
@@ -76,4 +77,12 @@ export type ModelInstance = {
   model: string;
   voice: string;
   config: ModelInstanceConfig;
+}
+
+export type EmailContext = {
+  prompt: string;
+  transcript: ConversationItem[];
+  duration: number;
+  to_phone_number: string;
+  secureLink: string;
 }
