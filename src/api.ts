@@ -4,7 +4,7 @@ import { config } from 'dotenv';
 import { ConversationAgent } from './conversation-agent.js';
 import { log } from './utils/logger.js';
 import { TwilioStreamWebSocketServer } from './twilio_webhook_handler.js';
-import { OutboundCallQueueHandler } from './queue_handler.js';
+import { OutboundCallQueueHandler } from './outbound_calls_queue_handler.js';
 
 // router.post('/outbound-call', async (req: Request, res: Response): Promise<void> => {
 //     try {

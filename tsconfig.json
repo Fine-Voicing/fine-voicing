@@ -23,5 +23,5 @@
       "noErrorTruncation": true, // When enabled, this option prevents TypeScript from truncating error messages, providing full details about the error.
       "declaration": true // Generates corresponding .d.ts file
   },
-  "include": ["src/api.ts", "src/conversation-agent.ts", "src/services/*.ts", "src/types/index.ts", "src/utils/*.ts", "src/queue_handler.ts", "src/twilio_webhook_handler.ts"]
+  "include": ["src/api.ts", "src/conversation-agent.ts", "src/services/*.ts", "src/types/index.ts", "src/utils/*.ts", "src/outbound_calls_queue_handler.ts", "src/twilio_webhook_handler.ts"]
 }
