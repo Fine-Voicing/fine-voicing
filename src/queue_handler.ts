@@ -6,7 +6,7 @@ import { AGENT_MODE } from './types/index.js';
 import { TwilioLogger } from './utils/logger.js';
 import Twilio from 'twilio';
 import { ModelInstance } from './types/index.js';
-
+import Stripe from 'stripe';
 export class OutboundCallQueueHandler {
     private supabase: SupabaseClient<any, "pgmq_public", any>;
     private supabaseQueueClient: SupabaseClient<any, "pgmq_public", any>;
@@ -49,7 +49,7 @@ export class OutboundCallQueueHandler {
         }
 
         this.supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-        this.supabaseQueueClient = createClient<any, "pgmq_public", any>(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!, {db: {schema: 'pgmq_public'}});
+        this.supabaseQueueClient = createClient<any, "pgmq_public", any>(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!, { db: { schema: 'pgmq_public' } });
         this.twilioClient = new Twilio.Twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!);
         this.activeAgents = activeAgents;
 
@@ -103,12 +103,12 @@ export class OutboundCallQueueHandler {
             throw new Error(`User ${data.message.user_id} is not verified`);
         }
 
-        const {data: conversationData, error: conversationFetchError} = await this.fetchConversation(data.message.conversation_id);
+        const { data: conversationData, error: conversationFetchError } = await this.fetchConversation(data.message.conversation_id);
         if (conversationFetchError) {
             throw new Error(conversationFetchError);
         }
 
-        const {data: modelInstanceData, error: modelInstanceFetchError} = await this.fetchModelInstance(data.message.model_instance_id);
+        const { data: modelInstanceData, error: modelInstanceFetchError } = await this.fetchModelInstance(data.message.model_instance_id);
         if (modelInstanceFetchError) {
             throw new Error(modelInstanceFetchError);
         }
@@ -126,10 +126,10 @@ export class OutboundCallQueueHandler {
         await agent.start();
 
         const callSid = await this.initTwilioCall(data.message.to_phone_number);
-        
+
         this.activeAgents.set(callSid, agent);
         agent.setCallSid(callSid);
-        agent.onStopped(this.onAgentStopped.bind(this, data.msg_id, callSid, conversationData, modelInstanceData));
+        agent.onStopped((durationSeconds: number) => this.onAgentStopped(data, callSid, conversationData, modelInstanceData, durationSeconds));
     }
 
     private async fetchConversation(conversationId: string): Promise<{ data: any | null, error: string | null }> {
@@ -208,8 +208,8 @@ export class OutboundCallQueueHandler {
         return call.sid;
     }
 
-    private async onAgentStopped(msgId: string, callSid: string, conversation: any, modelInstance: ModelInstance) {
-        log.info(`[OutboundCallQueueHandler] Archiving message: ${msgId}`);
+    private async onAgentStopped(messageData: OutboundCallMessage, callSid: string, conversation: any, modelInstance: ModelInstance, duration: number) {
+        log.info(`[OutboundCallQueueHandler] Archiving message: ${messageData.msg_id}`);
 
         const agent = this.activeAgents.get(callSid);
         if (!agent) {
@@ -218,11 +218,12 @@ export class OutboundCallQueueHandler {
         }
 
         await this.saveTranscripts(agent, conversation, modelInstance);
+        await this.stripeMeterOutboundCall(messageData.message.user_id, duration);
         this.activeAgents.delete(callSid);
 
         await this.supabaseQueueClient.rpc('archive', {
             'queue_name': this.QUEUE_NAME,
-            'message_id': msgId
+            'message_id': messageData.msg_id
         });
     }
 
@@ -256,6 +257,47 @@ export class OutboundCallQueueHandler {
                     return;
                 }
             }
+        });
+    }
+
+    private async stripeMeterOutboundCall(userId: string, durationSeconds: number) {
+        const { data, error } = await this.supabase.from('profiles').select('*').eq('id', userId).single();
+        if (error) {
+            log.error(`[OutboundCallQueueHandler] Stripe metering, error fetching user: ${error}`);
+            return;
+        }
+
+        const user_profile = data;
+        if (!user_profile) {
+            log.error(`[OutboundCallQueueHandler] Stripe meter error fetching user: ${error}`);
+            return;
+        }
+
+        const stripeSubscriptionId = user_profile.stripe_subscription_id;
+        if (!stripeSubscriptionId) {
+            log.error(`[OutboundCallQueueHandler] Stripe meter error, user has no stripe subscription id: ${userId}`);
+            return;
+        }
+
+        const stripeClient = new Stripe(process.env.STRIPE_API_KEY as string);
+        const subscription: Stripe.Subscription = await stripeClient.subscriptions.retrieve(stripeSubscriptionId);
+        if (!subscription) {
+            log.error(`[OutboundCallQueueHandler] Stripe meter error, error fetching subscription: ${error}`);
+            return;
+        }
+
+        const subscriptionItem = subscription.items.data[0];
+        if (!subscriptionItem) {
+            log.error(`[OutboundCallQueueHandler] Stripe meter error, error fetching subscription item: ${error}`);
+            return;
+        }
+
+        await stripeClient.billing.meterEvents.create({
+            event_name: 'outbound_call',
+            payload: {
+                value: durationSeconds.toString(),
+                stripe_customer_id: user_profile.stripe_customer_id,
+            },
         });
     }
 

@@ -142,7 +142,7 @@ class TwilioStreamConnectionHandler {
         this.onError(this.ws, error.error);
     }
 
-    private onAgentStopped(streamId: string) {
+    private onAgentStopped(duration: number) {
         this.logger.info('[TwilioStreamConnectionHandler] Conversation stopped');
         this.ws.close();
     }

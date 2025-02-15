@@ -30,7 +30,7 @@ export class ConversationAgent {
   private callSid: string;
   private modelInstance: ModelInstance;
   private indexTurn: number; 
-
+  private startTime: number;
   private readonly logger: TwilioLogger | null = null;
 
   private readonly TRANSCRIPTION_DEBOUNCE_MS = 100;
@@ -104,6 +104,7 @@ export interface PersonaInstructions {
 
     this.modelInstance = config.modelInstance || this.DEFAULT_MODEL_INSTANCE;
     this.indexTurn = 0;
+    this.startTime = new Date().getTime();
   }
 
   private setupEventHandlers() {
@@ -336,7 +337,7 @@ export interface PersonaInstructions {
     this.eventBus.on('error', callback);
   }
 
-  public async onStopped(callback: (streamSid: string) => void) {
+  public async onStopped(callback: (duration: number) => void) {
     this.logger?.debug('Registering agent stopped callback');
     this.eventBus.on('agent-stopped', callback);
   }
@@ -356,7 +357,7 @@ export interface PersonaInstructions {
 
     await this.cleanup();
 
-    this.eventBus.emit('agent-stopped', this.streamId);
+    this.eventBus.emit('agent-stopped', Math.round((new Date().getTime() - this.startTime) / 1000));
   }
 
   private processTTSOutput(chunk: Buffer, streamId: string) {
