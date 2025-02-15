@@ -32,6 +32,7 @@ export class ConversationAgent {
   private indexTurn: number; 
   private startTime: number;
   private readonly logger: TwilioLogger | null = null;
+  private recordedAudio: Buffer;
 
   private readonly TRANSCRIPTION_DEBOUNCE_MS = 100;
   private readonly LLM_DEBOUNCE_MS = 100;
@@ -105,6 +106,8 @@ export interface PersonaInstructions {
     this.modelInstance = config.modelInstance || this.DEFAULT_MODEL_INSTANCE;
     this.indexTurn = 0;
     this.startTime = new Date().getTime();
+
+    this.recordedAudio = Buffer.from([]);
   }
 
   private setupEventHandlers() {
@@ -215,6 +218,7 @@ export interface PersonaInstructions {
         case AGENT_MODE.STS:
           this.logger?.debug('Buffering audio chunk');
           this.audioBuffer.push(chunk);
+          this.recordedAudio = Buffer.concat([this.recordedAudio, chunk.data]);
           break;
       }
     } catch (error: any) {
@@ -425,6 +429,7 @@ export interface PersonaInstructions {
     }
 
     this.isSpeaking = true;
+    this.recordedAudio = Buffer.concat([this.recordedAudio, Buffer.from(audioDelta, 'base64')]);
     this.eventBus.emit('audio-out', {
       data: Buffer.from(audioDelta, 'base64'),
       streamSid: this.streamId,
@@ -563,5 +568,9 @@ export interface PersonaInstructions {
 
   public getTranscripts() {
     return this.transcripts;
+  }
+
+  public getRecordedAudio() {
+    return this.recordedAudio;
   }
 }

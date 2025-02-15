@@ -5,6 +5,7 @@ import { AGENT_MODE, EmailContext, ModelInstance, OutboundCallMessage } from './
 import Twilio from 'twilio';
 import Stripe from 'stripe';
 import { EmailService } from './services/email.service.js';
+import { writeWavFile } from './utils/audio-storage.js';
 
 export class OutboundCallQueueHandler {
     private supabase: SupabaseClient<any, "pgmq_public", any>;
@@ -205,7 +206,7 @@ export class OutboundCallQueueHandler {
             </Response>`;
 
         const call = await this.twilioClient.calls.create({
-            record: true,
+            //record: true,
             to: toPhoneNumber,
             from: process.env.TWILIO_PHONE_NUMBER as string,
             //statusCallback: `https://${fqdn}/twilio/voice/status`,
@@ -235,12 +236,18 @@ export class OutboundCallQueueHandler {
             return;
         }
 
+        const recordedAudio = agent.getRecordedAudio();
+        let wavFileUrl: string | null = null;
+        if (recordedAudio) {
+            wavFileUrl = await writeWavFile(messageData.message.to_phone_number, recordedAudio);
+        }
+
         const emailContext: EmailContext = {
             prompt: conversation.prompt,
             transcript: agent.getTranscripts(),
             duration: duration,
             to_phone_number: messageData.message.to_phone_number,
-            secureLink: ''
+            secureLink: wavFileUrl || ''
         };
         await this.emailService.sendEmail(user.data.user.email, emailContext);
 
