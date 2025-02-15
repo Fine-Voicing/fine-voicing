@@ -324,7 +324,7 @@ export interface PersonaInstructions {
 
   public onOutgoingAudio(callback: (audioChunk: AudioChunk) => void) {
     this.logger?.debug('Registering outgoing audio callback');
-    this.eventBus.on('audio-to-twilio', callback);
+    this.eventBus.on('audio-out', callback);
   }
 
   public async onResponseDone(callback: (streamSid: string) => void) {
@@ -364,7 +364,7 @@ export interface PersonaInstructions {
     this.logger?.debug('Generated audio chunk for Twilio');
 
     // Emit audio chunk
-    this.eventBus.emit('audio-to-twilio', {
+    this.eventBus.emit('audio-out', {
       data: chunk,
       streamSid: streamId,
       //modelInstanceId: this.modelInstanceId
@@ -420,7 +420,7 @@ export interface PersonaInstructions {
     }
 
     this.isSpeaking = true;
-    this.eventBus.emit('audio-to-twilio', {
+    this.eventBus.emit('audio-out', {
       data: Buffer.from(audioDelta, 'base64'),
       streamSid: this.streamId,
       //modelInstanceId: this.modelInstanceId
