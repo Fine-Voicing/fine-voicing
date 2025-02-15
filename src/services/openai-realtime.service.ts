@@ -9,6 +9,8 @@ export class OpenAIRealtimeService implements STTService {
     private readonly apiKey: string;
     private readonly instructions: string;
     private readonly voice: string;
+    private readonly model: string;
+
     private onAudioDelta: (audioDelta: string) => void;
     private onTranscriptionDone: (transcription: ConversationItem) => void;
     private onAudioDone: () => void;
@@ -16,9 +18,12 @@ export class OpenAIRealtimeService implements STTService {
     private isSessionUpdated: boolean = false;
     private logger: TwilioLogger;
 
+    private readonly DEFAULT_MODEL = 'gpt-4o-realtime-preview';
+
     constructor(config: {
         apiKey: string;
         instructions: string;
+        model?: string;
         voice?: string;
         onAudioDelta: (audioDelta: string) => void;
         onTranscriptionDone: (transcription: ConversationItem) => void;
@@ -28,6 +33,7 @@ export class OpenAIRealtimeService implements STTService {
     }) {
         this.apiKey = config.apiKey || process.env.OPENAI_API_KEY as string;
         this.instructions = config.instructions;
+        this.model = config.model || this.DEFAULT_MODEL;
         this.voice = config.voice || 'alloy';
         this.onAudioDelta = config.onAudioDelta;
         this.onTranscriptionDone = config.onTranscriptionDone;
@@ -44,7 +50,7 @@ export class OpenAIRealtimeService implements STTService {
             }
 
             this.logger.info('Initializing OpenAI Realtime client');
-            const url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview";
+            const url = `wss://api.openai.com/v1/realtime?model=${this.model}`;
             this.client = new WebSocket(
                 url,
                 {

@@ -52,3 +52,27 @@ export enum AGENT_MODE {
   LLM = 'llm',
   STS = 'sts',
 }
+
+export type OutboundCallMessage = {
+  msg_id: string;
+  read_ct: number;
+  message: {
+    user_id: string;
+    conversation_id: string;
+    model_instance_id: string;
+    to_phone_number: string;
+  }
+}
+
+export type ModelInstanceConfig = {
+  language: string;
+  max_turns: number;
+}
+
+export type ModelInstance = {
+  instance_id?: string;
+  provider: string;
+  model: string;
+  voice: string;
+  config: ModelInstanceConfig;
+}

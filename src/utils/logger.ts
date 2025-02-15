@@ -7,7 +7,7 @@ const logsDir = join(process.cwd(), 'logs');
 const logFormat = format.printf(({ level, message, timestamp, streamId, callSid }) => {
   const callPrefix = callSid ? `[Call ${callSid}] ` : '';
   const streamPrefix = streamId ? `[Stream ${streamId}] ` : '';
-  return `${timestamp} ${level}: ${streamPrefix}${callPrefix}${message}`;
+  return `${timestamp} ${level}: ${callPrefix}${streamPrefix}${message}`;
 });
 
 const logger = createLogger({

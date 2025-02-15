@@ -3,7 +3,7 @@ import { AudioChunk, TextChunk, LLMService, TTSService, STTService, ErrorEvent, 
 import { OpenAILLMService } from './services/openai-llm.service.js';
 import { OpenAITTSService } from './services/openai-tts.service.js';
 import { OpenAIRealtimeService } from './services/openai-realtime.service.js';
-import { ConversationItem, PersonaInstructions, PersonaInstruction } from './types/index.js';
+import { ConversationItem, PersonaInstructions, PersonaInstruction, ModelInstance } from './types/index.js';
 import { TwilioLogger } from './utils/logger.js';
 
 // Main conversation agent class
@@ -28,12 +28,25 @@ export class ConversationAgent {
   private isProcessing: boolean = false;
   private isSpeaking: boolean = false;
   private callSid: string;
+  private modelInstance: ModelInstance;
+  private indexTurn: number; 
 
   private readonly logger: TwilioLogger | null = null;
 
   private readonly TRANSCRIPTION_DEBOUNCE_MS = 100;
   private readonly LLM_DEBOUNCE_MS = 100;
   private readonly TTS_OUTPUT_DEBOUNCE_MS = 100;
+
+  private readonly MIN_MODERATION_TURN = 3;
+  private readonly DEFAULT_MODEL_INSTANCE: ModelInstance = {
+    provider: 'openai',
+    model: 'gpt-4o-realtime-preview',
+    voice: 'ash',
+    config: {
+      language: 'en-US',
+      max_turns: 10
+    }
+  }
 
   private readonly PERSONA_SYSTEM_INSTRUCTIONS = `
   # Goal
@@ -73,6 +86,7 @@ export interface PersonaInstructions {
     llmService?: LLMService,
     ttsService?: TTSService,
     sttService?: STTService,
+    modelInstance?: ModelInstance
   }) {
     this.logger?.info('Initializing ConversationAgent');
     this.eventBus = new EventEmitter();
@@ -87,6 +101,9 @@ export interface PersonaInstructions {
     this.llmService = config.llmService || null;
     this.ttsService = config.ttsService || null;
     this.sttService = config.sttService || null;
+
+    this.modelInstance = config.modelInstance || this.DEFAULT_MODEL_INSTANCE;
+    this.indexTurn = 0;
   }
 
   private setupEventHandlers() {
@@ -123,6 +140,7 @@ export interface PersonaInstructions {
       this.realtimeService = new OpenAIRealtimeService({
         apiKey: process.env.OPENAI_API_KEY as string,
         instructions: this.personaRole?.role_prompt || this.originalInstructions,
+        model: this.modelInstance.model,
         voice: 'ash',
         onAudioDelta: this.processSTSResponse.bind(this),
         onTranscriptionDone: this.processTranscriptionChunk.bind(this),
@@ -148,12 +166,12 @@ export interface PersonaInstructions {
         await new Promise(resolve => setTimeout(resolve, 10));
       }
       this.logger?.info('STS stream connection established');
-      this.isProcessing = true;
       this.processAudioBufferAsync();
     }
   }
 
   private async processAudioBufferAsync() {
+    this.isProcessing = true;
     while (this.isProcessing) {
       try {
         if (this.audioBuffer.length > 0) {
@@ -293,6 +311,10 @@ export interface PersonaInstructions {
 
   private async handleSTSError(error: any) {
     this.logger?.error('OpenAI Realtime error', error);
+    if (!this.isProcessing) {
+      this.logger?.info('STS error received but agent is not processing');
+      return;
+    }
     this.eventBus.emit('error', {
       step: 'sts-error',
       error
@@ -300,25 +322,41 @@ export interface PersonaInstructions {
   }
 
   public onOutgoingAudio(callback: (audioChunk: AudioChunk) => void) {
-    this.logger?.info('Registering outgoing audio callback');
-    this.isSpeaking = true;
+    this.logger?.debug('Registering outgoing audio callback');
     this.eventBus.on('audio-to-twilio', callback);
   }
 
   public async onResponseDone(callback: (streamSid: string) => void) {
-    this.logger?.info('Registering response done callback');
-    this.isSpeaking = false;
+    this.logger?.debug('Registering response done callback');
     this.eventBus.on('response.done', callback);
   }
 
   public onError(callback: (error: ErrorEvent) => void) {
-    this.logger?.info('Registering error callback');
+    this.logger?.debug('Registering error callback');
     this.eventBus.on('error', callback);
   }
 
-  public async onTerminateConversation(callback: (streamSid: string) => void) {
-    this.logger?.info('Registering terminate conversation callback');
-    this.eventBus.on('terminate-conversation', callback);
+  public async onStopped(callback: (streamSid: string) => void) {
+    this.logger?.debug('Registering agent stopped callback');
+    this.eventBus.on('agent-stopped', callback);
+  }
+
+  public async stop() {
+    this.logger?.info('Stopping ConversationAgent');
+
+    if (!this.isProcessing) {
+      this.logger?.info('Stopping already in progress');
+      return;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Give a last chance to get last messages or transcripts
+
+    this.isProcessing = false;
+    this.isSpeaking = false;
+
+    await this.cleanup();
+
+    this.eventBus.emit('agent-stopped', this.streamId);
   }
 
   private processTTSOutput(chunk: Buffer, streamId: string) {
@@ -358,6 +396,11 @@ export interface PersonaInstructions {
   }
 
   private async processTranscriptionChunk(transcription: ConversationItem) {
+    if (!this.isProcessing) {
+      this.logger?.info('Transcription received but agent is not processing');
+      return;
+    }
+
     this.logger?.info(`Received transcription: "${JSON.stringify(transcription, null, 2)}"`);
     this.transcripts.push(transcription);
 
@@ -370,6 +413,12 @@ export interface PersonaInstructions {
 
   private async processSTSResponse(audioDelta: string) {
     this.logger?.debug(`Received STS response: "${audioDelta}"`);
+    if (!this.isProcessing) {
+      this.logger?.info('STS response received but agent is not processing');
+      return;
+    }
+
+    this.isSpeaking = true;
     this.eventBus.emit('audio-to-twilio', {
       data: Buffer.from(audioDelta, 'base64'),
       streamSid: this.streamId,
@@ -379,22 +428,28 @@ export interface PersonaInstructions {
 
   private async handleSTSResponseDone() {
     this.logger?.info('STS response done');
+
+    if (!this.isProcessing) {
+      this.logger?.info('STS response received but agent is not processing');
+      return;
+    }
     this.eventBus.emit('response.done', this.streamId);
+
+    this.isSpeaking = false;
+    this.indexTurn++;
 
     const shouldContinue = await this.moderateConversation();
     if (!shouldContinue) {
       while (this.isSpeaking) {
         await new Promise(resolve => setTimeout(resolve, 10));
       }
-      this.eventBus.emit('terminate-conversation', this.streamId);
+      await this.stop();
     }
   }
 
   // Clean up method
-  public async cleanup() {
+  private async cleanup() {
     this.logger?.info('Starting cleanup');
-    this.isProcessing = false;  // Stop the audio buffer processing
-    this.isSpeaking = false;
 
     // Clear any pending timers
     const existingTranscriptionTimer = this.transcriptionTimers.get(this.streamId);
@@ -421,14 +476,15 @@ export interface PersonaInstructions {
     this.transcriptionBuffers.delete(this.streamId);
     this.llmBuffers.delete(this.streamId);
     await this.sttService?.disconnect();
+    await this.realtimeService?.disconnect();
     this.logger?.info('Cleanup completed');
   }
 
   public async generatePersonaInstructions(): Promise<PersonaInstructions> {
     let personaSystemInstructions = this.PERSONA_SYSTEM_INSTRUCTIONS;
     personaSystemInstructions = personaSystemInstructions.replace('{instructions}', this.originalInstructions);
-    personaSystemInstructions = personaSystemInstructions.replace('{language}', 'en-US');
-    personaSystemInstructions = personaSystemInstructions.replace('{max_turns}', '10');
+    personaSystemInstructions = personaSystemInstructions.replace('{language}', this.modelInstance.config.language);
+    personaSystemInstructions = personaSystemInstructions.replace('{max_turns}', this.modelInstance.config.max_turns.toString());
 
     this.logger?.debug('Persona system instructions: ' + personaSystemInstructions);
 
@@ -446,6 +502,7 @@ export interface PersonaInstructions {
 
       this.logger?.info('Persona instructions: ' + JSON.stringify(roles, null, 2));
       this.personaRole = roles.testing_role;
+      this.personaRole.role_prompt = `Never speak first, wait for the tested AI agent to speak first.\n` + this.personaRole.role_prompt;
       this.moderatorRole = roles.moderator;
 
       return roles;
@@ -456,19 +513,31 @@ export interface PersonaInstructions {
   }
 
   public async moderateConversation(): Promise<boolean> {
+    if (this.indexTurn > this.modelInstance.config.max_turns) {
+      this.logger?.info(`Moderation forced, indexTurn: ${this.indexTurn}, maxTurns: ${this.modelInstance.config.max_turns}`);
+      return false;
+    }
+
+    if (this.indexTurn < this.MIN_MODERATION_TURN) {
+      this.logger?.info(`Moderation skipped, indexTurn: ${this.indexTurn}, minModerationTurn: ${this.MIN_MODERATION_TURN}`);
+      return true;
+    }
+
     const prompt = `# Decision criteria
     \n${this.moderatorRole?.role_prompt}
     \n\nStart with continue OR terminate, without any formatting, all lower-case. Then, provide an explanation of the decision based on the conversation history. 
     \n\nAlways respond in English.
+    \n\nWhen one of the participants is trying to close the conversation (goodbye, etc), always terminate.
     \n\nConversation history (most recent last):
     \n${this.formatTranscripts()}`;
 
     this.logger?.debug('Moderation prompt: ' + prompt);
     const decision = (await this.llmService?.completeLLM(prompt))?.toLowerCase();
-    this.logger?.info('Moderation decision: ' + decision);
-
     const shouldContinue = decision?.startsWith('continue') || false;
+
     this.logger?.info('Moderation, should continue: ' + shouldContinue);
+    this.logger?.info('Moderation decision: ' + decision);
+    
     return shouldContinue;
   }
 
@@ -484,5 +553,9 @@ export interface PersonaInstructions {
   public setCallSid(callSid: string) {
     this.callSid = callSid;
     this.logger?.setCallSid(callSid);
+  }
+
+  public getTranscripts() {
+    return this.transcripts;
   }
 }

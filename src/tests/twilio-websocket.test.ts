@@ -165,13 +165,33 @@ const SANDRA_DEALERSHIP_PHONE_NUMBER = '+12025686833';
     log.info('Outbound call initiated successfully', { streamId: data.callSid });
   }, 10000);
 
-  test.only('Twilio e2e test - Sandra Dealership', async () => {
+  test('Twilio e2e test - Sandra Dealership', async () => {
     const response = await fetch(`http://localhost:${port}/outbound-call`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ prompt: SANDRA_DEALERSHIP_SYSTEM_MESSAGE_INBOUND, to_phone_number: SANDRA_DEALERSHIP_PHONE_NUMBER })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to initiate outbound call');
+    }
+
+    const data = await response.json();
+    
+    log.info('Outbound call initiated successfully', { streamId: data.callSid });
+  }, 10000);
+
+  test.only('Twilio e2e test - PlayHT Health Care', async () => {
+    const phoneNumber = '+13109190613';
+    const prompt = `DEMO AGENT Health Care Practice TRAINED ON Pre-visit questions, post-visit follow-ups, general FAQ, etc.`;
+    const response = await fetch(`http://localhost:${port}/outbound-call`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ prompt: prompt, to_phone_number: phoneNumber })
     });
 
     if (!response.ok) {
