@@ -152,10 +152,6 @@ export class OutboundCallQueueHandler {
             return { data: null, error: `Conversation not found: ${conversationId}` };
         }
 
-        if (!data.prompt) {
-            return { data: null, error: `Conversation prompt is empty: ${conversationId}` };
-        }
-
         return { data, error: null };
     }
 

@@ -544,7 +544,13 @@ Schema:
 
   public async generatePersonaInstructions(): Promise<PersonaInstructions> {
     let personaSystemInstructions = this.PERSONA_SYSTEM_INSTRUCTIONS;
-    personaSystemInstructions = personaSystemInstructions.replace('{instructions}', this.originalInstructions);
+
+    if (this.originalInstructions) {
+      personaSystemInstructions = personaSystemInstructions.replace('{instructions}', this.originalInstructions);
+    }
+    else {
+      personaSystemInstructions = personaSystemInstructions.replace('{instructions}', '<NO INSTRUCTIONS PROVIDED>');
+    }
 
     if (this.modelInstance.config.language) {
       personaSystemInstructions = personaSystemInstructions.replace('{language}', this.modelInstance.config.language);
