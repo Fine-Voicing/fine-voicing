@@ -262,7 +262,7 @@ export class OutboundCallQueueHandler {
 
         const transcripts = agent.getTranscripts();
         transcripts.forEach(async (transcript, index) => {
-            logger.info(`[OutboundCallQueueHandler] Transcript ${index}: ${transcript.role}: ${transcript.content}`);
+            logger.debug(`[OutboundCallQueueHandler] Transcript ${index}: ${transcript.role}: ${transcript.content}`);
             const message_data = {
                 'conversation_id': conversation.conversation_id,
                 'role': transcript.role,

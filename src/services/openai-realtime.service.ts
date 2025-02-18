@@ -49,7 +49,7 @@ export class OpenAIRealtimeService implements STTService {
                 return;
             }
 
-            this.logger.info('Initializing OpenAI Realtime client');
+            this.logger.debug('Initializing OpenAI Realtime client');
             const url = `wss://api.openai.com/v1/realtime?model=${this.model}`;
             this.client = new WebSocket(
                 url,

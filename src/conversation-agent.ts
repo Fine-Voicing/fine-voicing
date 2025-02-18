@@ -141,7 +141,7 @@ Schema:
   }
 
   private setupEventHandlers() {
-    this.logger?.info('Setting up event handlers');
+    this.logger?.debug('Setting up event handlers');
 
     // Handle incoming audio
     this.eventBus.on('audio-received', this.handleAudioReceived.bind(this));
@@ -154,7 +154,7 @@ Schema:
       this.eventBus.on('llm-response-chunk', this.handleLLMResponseChunk.bind(this));
     }
 
-    this.logger?.info('Event handlers setup completed');
+    this.logger?.debug('Event handlers setup completed');
   }
 
   private async initialize() {
