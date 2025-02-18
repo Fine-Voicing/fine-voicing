@@ -207,7 +207,7 @@ export class OutboundCallQueueHandler {
             </Response>`;
 
         const call = await this.twilioClient.calls.create({
-            //record: true,
+            record: true,
             to: toPhoneNumber,
             from: process.env.TWILIO_PHONE_NUMBER as string,
             //statusCallback: `https://${fqdn}/twilio/voice/status`,
