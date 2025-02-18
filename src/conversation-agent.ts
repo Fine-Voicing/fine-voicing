@@ -33,10 +33,13 @@ export class ConversationAgent {
   private startTime: number;
   private readonly logger: TwilioLogger | null = null;
   private recordedAudio: Buffer;
+  private inactivityTimer: NodeJS.Timeout | null = null;
+  private lastAudioReceivedTime: number | null = null;
 
   private readonly TRANSCRIPTION_DEBOUNCE_MS = 100;
   private readonly LLM_DEBOUNCE_MS = 100;
   private readonly TTS_OUTPUT_DEBOUNCE_MS = 100;
+  private readonly INACTIVITY_TIMEOUT_MS = 120000; // 2 minutes in milliseconds
 
   private readonly MIN_MODERATION_TURN = 3;
   private readonly DEFAULT_MODEL_INSTANCE: ModelInstance = {
@@ -170,8 +173,26 @@ export interface PersonaInstructions {
         await new Promise(resolve => setTimeout(resolve, 10));
       }
       this.logger?.info('STS stream connection established');
+
+      // Start inactivity timer
+      this.startInactivityTimer();
+
       this.processAudioBufferAsync();
     }
+  }
+
+  private startInactivityTimer() {
+    this.logger?.debug('Starting inactivity timer');
+    if (this.inactivityTimer) {
+      clearTimeout(this.inactivityTimer);
+    }
+
+    this.inactivityTimer = setTimeout(async () => {
+      if (!this.lastAudioReceivedTime) {
+        this.logger?.info('No audio received within 2 minutes of connection, stopping agent');
+        await this.stop();
+      }
+    }, this.INACTIVITY_TIMEOUT_MS);
   }
 
   private async processAudioBufferAsync() {
@@ -206,6 +227,8 @@ export interface PersonaInstructions {
 
   private async handleAudioReceived(chunk: AudioChunk) {
     this.logger?.debug('Received audio chunk');
+    this.lastAudioReceivedTime = Date.now();
+
     try {
       switch (this.mode) {
         case AGENT_MODE.LLM:
@@ -479,6 +502,11 @@ export interface PersonaInstructions {
     if (existingTTSTimer) {
       clearTimeout(existingTTSTimer);
       this.ttsOutputTimers.delete(this.streamId);
+    }
+
+    if (this.inactivityTimer) {
+      clearTimeout(this.inactivityTimer);
+      this.inactivityTimer = null;
     }
 
     this.logger?.info('Transcripts: ' + this.formatTranscripts());
