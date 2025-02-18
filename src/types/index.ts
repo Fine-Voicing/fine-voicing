@@ -54,6 +54,12 @@ export enum AGENT_MODE {
   STS = 'sts',
 }
 
+export enum AGENT_POSTURE { 
+  BASELINE = 'baseline',
+  EDGE = 'edge',
+  ATTACKER = 'attacker',
+}
+
 export type OutboundCallMessage = {
   msg_id: string;
   read_ct: number;
@@ -67,8 +73,10 @@ export type OutboundCallMessage = {
 }
 
 export type ModelInstanceConfig = {
-  language: string;
-  max_turns: number;
+  language?: string;
+  max_turns?: number;
+  posture?: AGENT_POSTURE;
+  custom_posture?: string;
 }
 
 export type ModelInstance = {
