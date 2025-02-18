@@ -20,3 +20,4 @@ prds
 build/
 # VS Code settings
 .vscode/
+deployments/

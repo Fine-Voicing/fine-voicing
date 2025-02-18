@@ -1,0 +1,29 @@
+services:
+  fine-voicing-outbound-calls:
+    image: fine-voicing-outbound-calls:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+    volumes:
+      # Mount logs directory to persist logs
+      - ./logs:/app/logs
+    user: "1000:1000"  # This ensures the container runs with the node user's UID
+    restart: unless-stopped
+    networks:
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.finevoicing-outbound-calls.rule=Host(`twilio.finevoicing.com`)"
+      - "traefik.http.routers.finevoicing-outbound-calls.entrypoints=web,websecure"
+      - "traefik.http.routers.finevoicing-outbound-calls.tls.certresolver=finevoicing"
+      - "traefik.http.services.finevoicing-outbound-calls.loadbalancer.server.port=3000"
+    
+networks:
+  traefik-network:
+    external: true
