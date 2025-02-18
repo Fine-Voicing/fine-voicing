@@ -101,7 +101,8 @@ export class OutboundCallQueueHandler {
 
         const userIsVerified = await this.isUserVerified(data.message.user_id);
         if (!userIsVerified) {
-            throw new Error(`User ${data.message.user_id} is not verified`);
+            logger.info(`User ${data.message.user_id} is not verified, skipping`);
+            return;
         }
 
         const { data: conversationData, error: conversationFetchError } = await this.fetchConversation(data.message.conversation_id);
@@ -178,7 +179,7 @@ export class OutboundCallQueueHandler {
         if (error) {
             return false;
         }
-        return data.user.email_confirmed_at !== null;
+        return data.user.email_confirmed_at !== undefined;
     }
 
     private async checkMessageRetryCount(msgId: string, retryCount: number): Promise<boolean> {
