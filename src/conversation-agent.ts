@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { AudioChunk, TextChunk, LLMService, TTSService, STTService, ErrorEvent, AGENT_MODE } from './types/index.js';
-import { OpenAILLMService } from './services/openai-llm.service.js';
+import { OpenRouterLLMService } from './services/openrouter-llm.service.js';
 import { OpenAITTSService } from './services/openai-tts.service.js';
 import { OpenAIRealtimeService } from './services/openai-realtime.service.js';
 import { ConversationItem, PersonaInstructions, PersonaInstruction, ModelInstance } from './types/index.js';
@@ -58,8 +58,9 @@ Generate detailed instructions for two roles engaging in a conversation:
 - A persona testing an AI agent. The tested AI agent is following the instructions below. Invent a character to engage in a conversation with it. Feel free to add details to make the conversation more realistic. The more details, the better.
 - A moderator watching the conversation. Its role is to decide wether or not the conversation should continue.
 
-# Output format
-JSON string. No markdown. Must match this typescript definition:
+# Return format
+Valid JSON string. No markdown (like \`\`\`json\`\`\`). No formatting. It must parse as valid JSON.
+Must match this typescript definition:
 
 export interface PersonaInstruction {
   role_name: string;
@@ -73,11 +74,28 @@ export interface PersonaInstructions {
 
 # Prompt guidelines
   - Today's date timestamp ${new Date().toISOString()}
-  - Conversation happening over the phone
-  - Happen in {language}.
-  - Testing role gender is female.
-  - Use realistic names based on gender.
- -   The conversation should last {max_turns} turns.
+  - The conversation happens over the phone.
+  - The conversation happens in {language}.
+  - The testing role is a male.
+  - Use realistic names based on the gender.
+ -  The conversation should last {max_turns} turns.
+
+ ## Style Guardrails
+- Be concise, one topic per response.
+- Use varied language, avoid repetition.
+- Keep tone conversational and friendly.
+- Wait for questions, don't anticipate.
+- Use casual date formats.
+
+## Response Guidelines
+- Handle unclear transcripts without mentioning errors.
+- Stay in character, guide tactfully.
+- Maintain fluid, direct dialogue. Not unnecessary politeness.
+- Assume understanding unless asked to repeat.
+- Ask questions one at a time.
+- Skip name repetition.
+- Announce information verification.
+- Do not repeat past information unless asked.
   
 # Tested Role Instructions
   {instructions}`;
@@ -102,7 +120,7 @@ export interface PersonaInstructions {
 
     this.logger = new TwilioLogger(config.callSid, config.streamId);
 
-    this.llmService = config.llmService || null;
+    this.llmService = config.llmService || new OpenRouterLLMService(process.env.OPENROUTER_API_KEY as string, 'mistralai/mistral-small-24b-instruct-2501');
     this.ttsService = config.ttsService || null;
     this.sttService = config.sttService || null;
 
@@ -131,10 +149,6 @@ export interface PersonaInstructions {
   }
 
   private async initialize() {
-    if (!this.llmService) {
-      this.llmService = new OpenAILLMService(process.env.OPENAI_API_KEY as string);
-    }
-
     await this.generatePersonaInstructions();
 
     if (this.mode === AGENT_MODE.LLM) {
@@ -258,7 +272,7 @@ export interface PersonaInstructions {
   private async handleTranscriptionChunk(data: TextChunk) {
     this.logger?.debug('Processing transcription through LLM');
     try {
-      await this.llmService?.streamLLM(
+      await this.llmService?.stream(
         data.text,
         this.processLLMResponseChunk.bind(this),
       );
@@ -527,7 +541,7 @@ export interface PersonaInstructions {
 
     this.logger?.debug('Persona system instructions: ' + personaSystemInstructions);
 
-    let response = await this.llmService?.completeLLM(personaSystemInstructions);
+    let response = await this.llmService?.complete(personaSystemInstructions);
     if (!response) {
       throw new Error('Failed to generate persona instructions');
     }
@@ -571,7 +585,7 @@ export interface PersonaInstructions {
     \n${this.formatTranscripts()}`;
 
     this.logger?.debug('Moderation prompt: ' + prompt);
-    const decision = (await this.llmService?.completeLLM(prompt))?.toLowerCase();
+    const decision = (await this.llmService?.complete(prompt))?.toLowerCase();
     const shouldContinue = decision?.startsWith('continue') || false;
 
     this.logger?.info('Moderation, should continue: ' + shouldContinue);

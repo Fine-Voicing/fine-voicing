@@ -35,8 +35,8 @@ export interface PersonaInstructions {
 }
 
 export interface LLMService {
-  streamLLM(prompt: string, onData: (chunk: string) => void): Promise<void>;
-  completeLLM(prompt: string): Promise<string>;
+  stream(prompt: string, onData: (chunk: string) => void): Promise<void>;
+  complete(prompt: string): Promise<string>;
 }
 
 export interface TTSService {
