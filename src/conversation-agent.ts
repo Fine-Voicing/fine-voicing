@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { AudioChunk, TextChunk, LLMService, TTSService, STTService, ErrorEvent, AGENT_MODE, AGENT_POSTURE } from './types/index.js';
+import { OpenAILLMService } from './services/openai-llm.service.js';
 import { OpenRouterLLMService } from './services/openrouter-llm.service.js';
 import { OpenAITTSService } from './services/openai-tts.service.js';
 import { OpenAIRealtimeService } from './services/openai-realtime.service.js';
@@ -129,7 +130,8 @@ Schema:
 
     this.logger = new TwilioLogger(config.callSid, config.streamId);
 
-    this.llmService = config.llmService || new OpenRouterLLMService(process.env.OPENROUTER_API_KEY as string, 'mistralai/mistral-small-24b-instruct-2501');
+    //this.llmService = config.llmService || new OpenRouterLLMService(process.env.OPENROUTER_API_KEY as string, 'mistralai/mistral-small-24b-instruct-2501');
+    this.llmService = config.llmService || new OpenAILLMService(process.env.OPENAI_API_KEY as string, 'gpt-4o');
     this.ttsService = config.ttsService || null;
     this.sttService = config.sttService || null;
 
@@ -654,5 +656,13 @@ Schema:
 
   public getRecordedAudio() {
     return this.recordedAudio;
+  }
+
+  public getPersonaRole() {
+    return this.personaRole;
+  }
+
+  public getModeratorRole() {
+    return this.moderatorRole;
   }
 }
