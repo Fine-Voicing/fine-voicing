@@ -171,7 +171,7 @@ Schema:
         apiKey: process.env.OPENAI_API_KEY as string,
         instructions: this.personaRole?.role_prompt || this.originalInstructions,
         model: this.modelInstance.model,
-        voice: 'ash',
+        voice: this.modelInstance.voice,
         onAudioDelta: this.processSTSResponse.bind(this),
         onTranscriptionDone: this.processTranscriptionChunk.bind(this),
         onAudioDone: this.handleSTSResponseDone.bind(this),
