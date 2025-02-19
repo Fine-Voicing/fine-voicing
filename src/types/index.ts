@@ -93,4 +93,5 @@ export type EmailContext = {
   duration: number;
   to_phone_number: string;
   secureLink: string;
+  fineVoicingRole: PersonaInstruction;
 }

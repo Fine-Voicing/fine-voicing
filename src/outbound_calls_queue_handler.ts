@@ -244,7 +244,8 @@ export class OutboundCallQueueHandler {
             transcript: agent.getTranscripts(),
             duration: duration,
             to_phone_number: messageData.message.to_phone_number,
-            secureLink: wavFileUrl || ''
+            secureLink: wavFileUrl || '',
+            fineVoicingRole: agent.getPersonaRole() || { role_name: 'Fine Voicing', role_prompt: '<EMPTY ROLE INSTRUCTIONS>' }
         };
         await this.emailService.sendEmail(user.data.user.email, emailContext);
 

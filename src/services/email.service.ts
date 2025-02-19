@@ -62,7 +62,8 @@ export class EmailService {
                 <p>Fine Voicing just completed an outbound call to ${emailContext.to_phone_number}. Listen to it through <a href="${emailContext.secureLink}">this link</a> (expires in 7 days)</p>
                 <p><a target='_blank' href='https://finevoicing.com/'>Log in</a> to your account to run more test outbound calls using Fine Voicing API.</p>
                 <p>We are looking forward to your feedback!</p>
-                <p><strong>System prompt:</strong> ${this.sanitizeHtml(emailContext.prompt)}</p>
+                <p><strong>Your original instructions:</strong> ${this.sanitizeHtml(emailContext.prompt)}</p>
+                <p><strong>${emailContext.fineVoicingRole.role_name} (Fine Voicing):</strong> ${emailContext.fineVoicingRole.role_prompt}</p>
                 <p><strong>Transcript:</strong></p>${this.formatTranscriptHtml(emailContext.transcript)}
                 <p>- The Fine Voicing team.</p>`;
 
