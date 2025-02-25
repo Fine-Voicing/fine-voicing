@@ -169,9 +169,47 @@ Schema:
       //this.sttService = sttService || new GladiaSTTService(streamId, process.env.GLADIA_API_KEY as string, this.processTranscriptionChunk.bind(this));
     }
     else {
+      const posture = this.modelInstance.config.posture || AGENT_POSTURE.BASELINE;
+      const customPosture = this.modelInstance.config.custom_posture;
+      let postureInstructions = '';
+
+      if (customPosture) {
+        postureInstructions = customPosture;
+      } else if (posture) {
+        switch (posture) {
+          case AGENT_POSTURE.ATTACKER:
+            postureInstructions = this.ATTACKER_POSTURE_INSTRUCTIONS;
+            break;
+          case AGENT_POSTURE.BASELINE:
+            postureInstructions = this.BASELINE_POSTURE_INSTRUCTIONS;
+            break;
+          case AGENT_POSTURE.EDGE:
+            postureInstructions = this.EDGE_POSTURE_INSTRUCTIONS;
+            break;
+          default:
+            throw new Error('Invalid posture');
+        }
+      }
+
+      const instructions = `
+      <Goal>
+        Engage in the conversation with the tested agent, following the instructions below.
+      </Goal>
+      <ResponseGuidelines>
+      - You are to follow the instructions below.
+      - You should never step in the role of the tested agent.
+      - You are to speak in ${this.modelInstance.config.language}.
+      </ResponseGuidelines>
+      <Posture>
+        ${postureInstructions}
+      </Posture>
+      <Instructions>
+        ${this.personaRole?.role_prompt}
+      </Instructions>`;
+
       this.realtimeService = new OpenAIRealtimeService({
         apiKey: process.env.OPENAI_API_KEY as string,
-        instructions: this.personaRole?.role_prompt || this.originalInstructions,
+        instructions: instructions,
         model: this.modelInstance.model,
         voice: this.modelInstance.voice,
         onAudioDelta: this.processSTSResponse.bind(this),
@@ -618,13 +656,18 @@ Schema:
       return true;
     }
 
-    const prompt = `# Decision criteria
-    \n${this.moderatorRole?.role_prompt}
-    \n\nStart with continue OR terminate, without any formatting, all lower-case. Then, provide an explanation of the decision based on the conversation history. 
-    \n\nAlways respond in English.
-    \n\nWhen one of the participants is trying to close the conversation (goodbye, etc), always terminate.
-    \n\nConversation history (most recent last):
-    \n${this.formatTranscripts()}`;
+    const prompt = `
+    \n<DecisionCriteria>
+    ${this.moderatorRole?.role_prompt}
+    </DecisionCriteria>
+    <ResponseGuidelines>
+    \n\n- Start with continue OR terminate, without any formatting, all lower-case. Then, provide an explanation of the decision based on the conversation history. 
+    \n\n- Always respond in English.
+    \n\n- When one of the participants is trying to close the conversation (goodbye, etc), always terminate.
+    </ResponseGuidelines>
+    \n\n<ConversationHistory>
+    ${this.formatTranscripts()}
+    </ConversationHistory>`;
 
     this.logger?.debug('Moderation prompt: ' + prompt);
     const decision = (await this.llmService?.complete(prompt))?.toLowerCase();
