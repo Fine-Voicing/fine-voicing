@@ -82,18 +82,18 @@ export class OpenAIRealtimeService implements STTService {
     }
 
     private isSilentFrame(audioData: Uint8Array): boolean {
-        // G.711 µ-law has a bias of 128, so we need to decode the values
-        // This is a simple amplitude check - adjust threshold as needed
-        const threshold = 2; // Adjust this value based on your needs
-        let maxAmplitude = 0;
+        // In µ-law encoding, 0xFF (255) represents near-silence
+        const threshold = 253; // High threshold since 255 is silence
+        let silentSamples = 0;
         
         for (const byte of audioData) {
-            // Convert µ-law to linear PCM (simplified)
-            const linear = Math.abs(byte - 128);
-            maxAmplitude = Math.max(maxAmplitude, linear);
+            if (byte >= threshold) {
+                silentSamples++;
+            }
         }
         
-        return maxAmplitude < threshold;
+        // Consider frame silent if most samples are silent (e.g., 90%)
+        return silentSamples / audioData.length > 0.9;
     }
 
     async sendAudio(audioChunk: AudioChunk): Promise<void> {
