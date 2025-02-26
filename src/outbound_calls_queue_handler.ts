@@ -272,7 +272,7 @@ export class OutboundCallQueueHandler {
             };
             const message_response = await this.supabase.from('messages').insert(message_data).select();
             if (message_response.error) {
-                logger.error(`[OutboundCallQueueHandler] Error inserting message: ${message_response.error}`);
+                logger.error(`[OutboundCallQueueHandler] Error inserting message: ${JSON.stringify(message_response.error, null, 2)}`);
                 return;
             }
 
@@ -349,7 +349,7 @@ export class OutboundCallQueueHandler {
         for (const [callSid, agent] of this.activeAgents.entries()) {
             try {
                 await agent.stop();
-                this.activeAgents.delete(callSid);
+                //this.activeAgents.delete(callSid);
                 log.info('Agent cleaned up during graceful shutdown', { callSid });
             } catch (error: any) {
                 log.error('Error cleaning up agent', error);
