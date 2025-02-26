@@ -6,6 +6,7 @@ import { OpenAITTSService } from './services/openai-tts.service.js';
 import { OpenAIRealtimeService } from './services/openai-realtime.service.js';
 import { ConversationItem, PersonaInstructions, PersonaInstruction, ModelInstance } from './types/index.js';
 import { TwilioLogger } from './utils/logger.js';
+import { UltravoxService } from './services/ultravox.service.js';
 
 // Main conversation agent class
 export class ConversationAgent {
@@ -20,7 +21,7 @@ export class ConversationAgent {
   private llmBuffers: Map<string, string> = new Map();
   private llmTimers: Map<string, NodeJS.Timeout> = new Map();
   private ttsOutputTimers: Map<string, NodeJS.Timeout> = new Map();
-  private realtimeService: OpenAIRealtimeService | null = null;
+  private realtimeService: STTService | null = null;
   private mode: AGENT_MODE;
   private originalInstructions: string;
   private personaRole: PersonaInstruction | null = null;
@@ -207,11 +208,25 @@ Schema:
         ${this.personaRole?.role_prompt}
       </Instructions>`;
 
-      this.realtimeService = new OpenAIRealtimeService({
-        apiKey: process.env.OPENAI_API_KEY as string,
+      // this.realtimeService = new OpenAIRealtimeService({
+      //   apiKey: process.env.OPENAI_API_KEY as string,
+      //   instructions: instructions,
+      //   model: this.modelInstance.model,
+      //   voice: this.modelInstance.voice,
+      //   onAudioDelta: this.processSTSResponse.bind(this),
+      //   onTranscriptionDone: this.processTranscriptionChunk.bind(this),
+      //   onAudioDone: this.handleSTSResponseDone.bind(this),
+      //   onError: this.handleSTSError.bind(this),
+      //   logger: this.logger!
+      // });
+
+      const language = this.modelInstance.config.language || 'en-US';
+      this.realtimeService = new UltravoxService({
+        apiKey: process.env.ULTRAVOX_API_KEY as string,
         instructions: instructions,
-        model: this.modelInstance.model,
-        voice: this.modelInstance.voice,
+        model: 'fixie-ai/ultravox',
+        voice: 'Mark',
+        language: language,
         onAudioDelta: this.processSTSResponse.bind(this),
         onTranscriptionDone: this.processTranscriptionChunk.bind(this),
         onAudioDone: this.handleSTSResponseDone.bind(this),

@@ -47,6 +47,7 @@ export interface STTService {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   sendAudio(audioChunk: AudioChunk): Promise<void>;
+  isConnected(): boolean;
 } 
 
 export enum AGENT_MODE {

@@ -58,6 +58,46 @@ export class AudioConverter {
     return result;
   }
 
+  static convertPCM8kToMulaw(inputBuffer: Buffer): Buffer {
+    // Handle undefined or null input
+    if (!inputBuffer) {
+      return Buffer.alloc(0);
+    }
+
+    // Convert 16-bit PCM at 8kHz to μ-law
+    // Each PCM sample is 2 bytes (16-bit)
+    const sampleCount = Math.floor(inputBuffer.length / 2);
+    const mulawBuffer = Buffer.alloc(sampleCount);
+    
+    // Process only complete 16-bit samples
+    for (let i = 0; i < sampleCount; i++) {
+      if ((i * 2) + 1 < inputBuffer.length) {
+        const sample = inputBuffer.readInt16LE(i * 2);
+        mulawBuffer[i] = this.pcmToMulaw(sample);
+      }
+    }
+    
+    return mulawBuffer;
+  }
+
+  static convertMulawToPCM8k(inputBuffer: Buffer): Buffer {
+    // Handle undefined or null input
+    if (!inputBuffer) {
+      return Buffer.alloc(0);
+    }
+    
+    // Convert μ-law to 16-bit PCM at 8kHz
+    // Each μ-law sample is 1 byte, each PCM sample will be 2 bytes
+    const pcmBuffer = Buffer.alloc(inputBuffer.length * 2);
+    
+    for (let i = 0; i < inputBuffer.length; i++) {
+      const pcmSample = this.mulawToPcm(inputBuffer[i] ?? 0);
+      pcmBuffer.writeInt16LE(pcmSample, i * 2);
+    }
+    
+    return pcmBuffer;
+  }
+
   static convertPCM24kTo8kMulaw(inputBuffer: Buffer): Buffer {
     const downsamplingFactor = 3; // 24000 / 8000 = 3
     const samplesCount = Math.floor(inputBuffer.length / 2); // 16-bit = 2 bytes per sample
